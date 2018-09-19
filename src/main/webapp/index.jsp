@@ -56,9 +56,9 @@
 	
 	<!-- 3.使用webuploader进行渲染 -->
 	<script type="text/javascript">
-		var checkChunkUrl = "./checkChunks.action";
-		var uploadUrl = "./upLoadFileBlock.action";
-		var mergerBlockUrl = "./mergeChunks.action";
+		var checkChunkUrl = "checkChunks.do";
+		var uploadUrl = "upLoadFileBlock.do";
+		var mergerBlockUrl = "mergeChunks.do";
 		var fileMd5;
 		var fileName;
 		var fileSize;

@@ -18,7 +18,8 @@ http://www.springframework.org/schema/tx/spring-tx.xsd">
 		<property name="locations">
 			<list>
 				<!-- jdbc配置 -->
-				<value>classpath*:applicationContext.propreties</value>
+				<value>classpath*:db.properties</value>
+				<value>classpath*:sftp-pool.properties</value>
 			</list>
 		</property>
 	</bean>
@@ -38,13 +39,5 @@ http://www.springframework.org/schema/tx/spring-tx.xsd">
 	</bean>
 	<!-- 注解式事务 -->
 	<tx:annotation-driven transaction-manager="transactionManager"/>
-	
-	<!--sftp 配置文件  -->
-	<bean id="systemFileMsg" class = "com.itors.vo.SystemFileMsg">
-		<property name="sftpHost" value="${sftp.host}"></property>
-		<property name="sftpPort" value="${sftp.port}"></property>
-		<property name="sftpUsername" value="${sftp.userName}"></property>
-		<property name="sftpPassword" value="${sftp.password}"></property>
-		<property name="timeout" value="${sftp.timeout}"></property>
-	</bean>
+
 </beans>

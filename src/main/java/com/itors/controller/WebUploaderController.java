@@ -1,6 +1,5 @@
 package com.itors.controller;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -13,7 +12,6 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,39 +20,42 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.itors.util.Constant;
 import com.itors.util.DateUtil;
-import com.itors.util.SFTPUtils;
-import com.itors.vo.SystemFileMsg;
+import com.itors.util.SftpUtil;
+import com.itors.util.sftpPool.KeyedSftpFactory;
+import com.itors.vo.SftpConfig;
 
 @Controller
 public class WebUploaderController {
 	
 	private static Log logger = LogFactory.getLog(WebUploaderController.class);
-	
-	@Autowired
-	private SystemFileMsg sysFile;
-
+    @RequestMapping(params="/test")
+    @ResponseBody
+    public Object test(HttpServletRequest request) {
+    	return 22;
+    }
     /**
      * 验证每个分块，检查当前分块是否上传成功
      * @param request
      * @param response
+     * @throws Exception 
      */
-    @RequestMapping(params="/checkChunks")
+    @RequestMapping("/checkChunks")
     @ResponseBody
-    public Object checkChunk(HttpServletRequest request) {
-    	logger.debug("---------------- 获取 已上传的文件 ------------------");
-    	
+    public Object checkChunk(HttpServletRequest request) throws Exception {
+    	logger.debug("---------------- 获取 已上传的文件块 ------------------");
     	List<Map> blocks = new ArrayList<Map>();
     	// 分块目录
 		String fileMd5 = request.getParameter("fileMd5");
 		// 分块大小
 		String ftpUploadDirTemp = "";
-		SFTPUtils sftpUtils = new SFTPUtils();
+		// 从池中获取连接
+		SftpUtil sftpUtil = KeyedSftpFactory.getSftpPool().borrowSftpUtil(Constant.SFTP_01);
+		SftpConfig sftpCfg = sftpUtil.getSftpCfg();
 		try {
-			sftpUtils.open(sysFile.getSftpHost(),sysFile.getSftpPort(),sysFile.getSftpUsername(),sysFile.getSftpPassword());
     		// 得到分块的临时文件夹
-        	ftpUploadDirTemp = sysFile.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR+"/"+fileMd5;
-        	if(sftpUtils.isDirExist(ftpUploadDirTemp)){
-        		Vector vector = sftpUtils.getAllFiles(ftpUploadDirTemp,Constant.BLOCK_SUFFIX);
+        	ftpUploadDirTemp = sftpCfg.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR+"/"+fileMd5;
+        	if(sftpUtil.isDirExist(ftpUploadDirTemp)){
+        		Vector vector = sftpUtil.getAllFiles(ftpUploadDirTemp,Constant.BLOCK_SUFFIX);
            	 	for(Object obj :vector){
                     if(obj instanceof com.jcraft.jsch.ChannelSftp.LsEntry){
                         String fileName = ((com.jcraft.jsch.ChannelSftp.LsEntry)obj).getFilename();
@@ -69,26 +70,61 @@ public class WebUploaderController {
 		}catch(Exception e) {
 			logger.error(e.getMessage(),e);
 		}finally {
-			sftpUtils.close();
+			 KeyedSftpFactory.getSftpPool().returnSftpUtil(Constant.SFTP_01, sftpUtil);
 		}
 		return blocks;
+    }
+    
+    /**
+     * 断点续传
+     * @param request
+     * @param response
+     * @throws Exception 
+     */
+    @RequestMapping("/upLoadFileBlock")
+    @ResponseBody
+    public boolean upLoadFileBlock(@RequestParam("file") MultipartFile file,HttpServletRequest request) throws Exception{
+    	logger.debug("------------上传分块start-------------------");
+    	boolean uploadFlag = true;
+		String fileMd5 = request.getParameter("fileMd5");
+		String chunk = request.getParameter("chunk");
+		SftpUtil sftpUtil = KeyedSftpFactory.getSftpPool().borrowSftpUtil(Constant.SFTP_01);
+		SftpConfig sftpCfg = sftpUtil.getSftpCfg();
+		if(null==chunk ||"".equals(chunk) || null== fileMd5 || "".equals(fileMd5) ){
+			return false;
+		}
+		// 4.开始解析文件
+		try {
+			String ftpUploadDir = sftpCfg.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR+"/"+fileMd5;
+			logger.debug(ftpUploadDir);
+        	// 2.保存文件
+			sftpUtil.uploadFileToSftp(ftpUploadDir, chunk+ Constant.BLOCK_SUFFIX , file.getInputStream());
+		} catch (Exception e) {
+			logger.error(e.getMessage());
+			uploadFlag = false;
+		}finally { 
+			 KeyedSftpFactory.getSftpPool().returnSftpUtil(Constant.SFTP_01, sftpUtil);
+		}
+		return uploadFlag;
     }
     
     /**
      * 合并文件
      * @param request
      * @param response
-     * @throws IOException 
+     * @throws Exception 
      */
-    @RequestMapping(params="/mergeChunks")
+    @RequestMapping("/mergeChunks")
     @ResponseBody
-    public Object mergeChunks(HttpServletRequest request,HttpServletResponse response) throws IOException {
+    public Object mergeChunks(HttpServletRequest request,HttpServletResponse response) throws Exception {
     	logger.debug("----------------合并文件start------------------");
     	// 需要合并的文件的标记
 		String fileMd5 = request.getParameter("fileMd5");
 		String fileName = request.getParameter("fileName");
 		String fileSize = request.getParameter("fileSize");
-		SFTPUtils sftpUtils = new SFTPUtils();
+		SftpUtil sftpUtil = KeyedSftpFactory.getSftpPool().borrowSftpUtil(Constant.SFTP_01);
+		SftpConfig sftpCfg = sftpUtil.getSftpCfg();
+		
 		Map<String, Object> mesMap = new HashMap<String, Object>();
     	Map<String,Object> map = new HashMap<String,Object>();
     	StringBuilder command = new StringBuilder("cat ");
@@ -96,26 +132,25 @@ public class WebUploaderController {
 			String fileSuffix = fileName.substring(fileName.lastIndexOf('.')+1).toLowerCase();
     		// 得到分块的临时文件夹
         	String tempPath = DateUtil.parseDateToStr(new Date(), DateUtil.DATE_FORMAT_YYYYMMDD);	
-        	String blockDir = sysFile.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR + "/" + fileMd5;
-           	String ftpUploadDir = sysFile.getFileUploadPath()+"/"+tempPath;
-        	sftpUtils.open(sysFile.getSftpHost(),sysFile.getSftpPort(),sysFile.getSftpUsername(),sysFile.getSftpPassword());
-			if(sftpUtils.isDirExist(blockDir)) {
-				sftpUtils.cd(blockDir);
+        	String blockDir = sftpCfg.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR + "/" + fileMd5;
+           	String ftpUploadDir = sftpCfg.getFileUploadPath()+"/"+tempPath;
+			if(sftpUtil.isDirExist(blockDir)) {
+				sftpUtil.cd(blockDir);
 				//校验是否上传完
 				String ftpFileName = System.currentTimeMillis()+"."+fileSuffix;
 				String realFile = ftpUploadDir+"/"+ftpFileName;
-				Vector vector = sftpUtils.getAllFiles(blockDir,Constant.BLOCK_SUFFIX);
+				Vector vector = sftpUtil.getAllFiles(blockDir,Constant.BLOCK_SUFFIX);
 				int fileNum = vector.size();
-				if(sftpUtils.isFileExist(blockDir+"/"+(vector.size()-1)+Constant.BLOCK_SUFFIX)){
+				if(sftpUtil.isFileExist(blockDir+"/"+(vector.size()-1)+Constant.BLOCK_SUFFIX)){
 					for (int i = 0; i < fileNum; i++) {
 						command.append(" "+blockDir+"/"+i + Constant.BLOCK_SUFFIX);
 					}
 					command.append("> " + realFile);
 				}
-				int result = sftpUtils.execute(sysFile.getSftpHost(), sysFile.getSftpPort(),sysFile.getSftpUsername(),sysFile.getSftpPassword(),command.toString());
+				int result = sftpUtil.executeShell(command.toString());
 				String rmFile = "rm -rf " + blockDir;
-				if(result!=-1){
-					result = sftpUtils.execute(sysFile.getSftpHost(), sysFile.getSftpPort(),sysFile.getSftpUsername(),sysFile.getSftpPassword(),rmFile);
+				if(Constant.EXEC_SHELL_RESULT_ERROR.equals(result)){
+					result = sftpUtil.executeShell(rmFile);
 				}
 				map.put(Constant.RESULT_STAT, Constant.RESULT_STAT_SUCCESS);
 				map.put("msg", "上传成功");
@@ -130,41 +165,8 @@ public class WebUploaderController {
 			map.put(Constant.RESULT_STAT, Constant.RESULT_STAT_ERROR);
 			map.put("msg", "上传失败");
 		}finally {
-			sftpUtils.close();
+			 KeyedSftpFactory.getSftpPool().returnSftpUtil(Constant.SFTP_01, sftpUtil);
 		}
 		return map;
-    }
-    
-    
-    /**
-     * 断点续传
-     * @param request
-     * @param response
-     * @throws IOException
-     */
-    @RequestMapping(params="/upLoadFileBlock")
-    @ResponseBody
-    public boolean upLoadFileBlock(@RequestParam("file") MultipartFile file,HttpServletRequest request) throws IOException{
-    	logger.debug("------------上传分块start-------------------");
-    	boolean uploadFlag = true;
-		String fileMd5 = request.getParameter("fileMd5");
-		String chunk = request.getParameter("chunk");
-		SFTPUtils sftpUtils = new SFTPUtils();
-		if(null==chunk ||"".equals(chunk) || null== fileMd5 || "".equals(fileMd5) ){
-			return false;
-		}
-		// 4.开始解析文件
-		try {
-			String ftpUploadDir = sysFile.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR+"/"+fileMd5;
-			logger.debug(ftpUploadDir);
-        	// 2.保存文件
-        	sftpUtils.uploadFileResumeNoMonitors(ftpUploadDir, chunk+ Constant.BLOCK_SUFFIX ,file.getInputStream(), sysFile.getSftpHost(), sysFile.getSftpPort(),sysFile.getSftpUsername(),sysFile.getSftpPassword());
-		} catch (Exception e) {
-			logger.error(e.getMessage());
-			uploadFlag = false;
-		}finally { 
-			sftpUtils.close();
-		}
-		return uploadFlag;
     }
 }

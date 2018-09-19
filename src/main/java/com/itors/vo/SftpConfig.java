@@ -1,11 +1,13 @@
 package com.itors.vo;
 
+
+
 /**
  * @author itors 
  * sftp ≈‰÷√
  *
  */
-public class SystemFileMsg {
+public class SftpConfig {
 
 	private String sftpHost;
 
@@ -65,6 +67,6 @@ public class SystemFileMsg {
 
 	public void setTimeout(String timeout) {
 		this.timeout = timeout;
-	}
+	}	
 
 }
