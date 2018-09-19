@@ -34,7 +34,7 @@ public class WebUploaderController {
     	return 22;
     }
     /**
-     * ÑéÖ¤Ã¿¸ö·Ö¿é£¬¼ì²éµ±Ç°·Ö¿éÊÇ·ñÉÏ´«³É¹¦
+     * éªŒè¯æ¯ä¸ªåˆ†å—ï¼Œæ£€æŸ¥å½“å‰åˆ†å—æ˜¯å¦ä¸Šä¼ æˆåŠŸ
      * @param request
      * @param response
      * @throws Exception 
@@ -42,17 +42,17 @@ public class WebUploaderController {
     @RequestMapping("/checkChunks")
     @ResponseBody
     public Object checkChunk(HttpServletRequest request) throws Exception {
-    	logger.debug("---------------- »ñÈ¡ ÒÑÉÏ´«µÄÎÄ¼ş¿é ------------------");
+    	logger.debug("---------------- è·å– å·²ä¸Šä¼ çš„æ–‡ä»¶å— ------------------");
     	List<Map> blocks = new ArrayList<Map>();
-    	// ·Ö¿éÄ¿Â¼
+    	// åˆ†å—ç›®å½•
 		String fileMd5 = request.getParameter("fileMd5");
-		// ·Ö¿é´óĞ¡
+		// åˆ†å—å¤§å°
 		String ftpUploadDirTemp = "";
-		// ´Ó³ØÖĞ»ñÈ¡Á¬½Ó
+		// ä»æ± ä¸­è·å–è¿æ¥
 		SftpUtil sftpUtil = KeyedSftpFactory.getSftpPool().borrowSftpUtil(Constant.SFTP_01);
 		SftpConfig sftpCfg = sftpUtil.getSftpCfg();
 		try {
-    		// µÃµ½·Ö¿éµÄÁÙÊ±ÎÄ¼ş¼Ğ
+    		// å¾—åˆ°åˆ†å—çš„ä¸´æ—¶æ–‡ä»¶å¤¹
         	ftpUploadDirTemp = sftpCfg.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR+"/"+fileMd5;
         	if(sftpUtil.isDirExist(ftpUploadDirTemp)){
         		Vector vector = sftpUtil.getAllFiles(ftpUploadDirTemp,Constant.BLOCK_SUFFIX);
@@ -76,7 +76,7 @@ public class WebUploaderController {
     }
     
     /**
-     * ¶ÏµãĞø´«
+     * æ–­ç‚¹ç»­ä¼ 
      * @param request
      * @param response
      * @throws Exception 
@@ -84,7 +84,7 @@ public class WebUploaderController {
     @RequestMapping("/upLoadFileBlock")
     @ResponseBody
     public boolean upLoadFileBlock(@RequestParam("file") MultipartFile file,HttpServletRequest request) throws Exception{
-    	logger.debug("------------ÉÏ´«·Ö¿éstart-------------------");
+    	logger.debug("------------ä¸Šä¼ åˆ†å—start-------------------");
     	boolean uploadFlag = true;
 		String fileMd5 = request.getParameter("fileMd5");
 		String chunk = request.getParameter("chunk");
@@ -93,11 +93,11 @@ public class WebUploaderController {
 		if(null==chunk ||"".equals(chunk) || null== fileMd5 || "".equals(fileMd5) ){
 			return false;
 		}
-		// 4.¿ªÊ¼½âÎöÎÄ¼ş
+		// 4.å¼€å§‹è§£ææ–‡ä»¶
 		try {
 			String ftpUploadDir = sftpCfg.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR+"/"+fileMd5;
 			logger.debug(ftpUploadDir);
-        	// 2.±£´æÎÄ¼ş
+        	// 2.ä¿å­˜æ–‡ä»¶
 			sftpUtil.uploadFileToSftp(ftpUploadDir, chunk+ Constant.BLOCK_SUFFIX , file.getInputStream());
 		} catch (Exception e) {
 			logger.error(e.getMessage());
@@ -109,7 +109,7 @@ public class WebUploaderController {
     }
     
     /**
-     * ºÏ²¢ÎÄ¼ş
+     * åˆå¹¶æ–‡ä»¶
      * @param request
      * @param response
      * @throws Exception 
@@ -117,8 +117,8 @@ public class WebUploaderController {
     @RequestMapping("/mergeChunks")
     @ResponseBody
     public Object mergeChunks(HttpServletRequest request,HttpServletResponse response) throws Exception {
-    	logger.debug("----------------ºÏ²¢ÎÄ¼şstart------------------");
-    	// ĞèÒªºÏ²¢µÄÎÄ¼şµÄ±ê¼Ç
+    	logger.debug("----------------åˆå¹¶æ–‡ä»¶start------------------");
+    	// éœ€è¦åˆå¹¶çš„æ–‡ä»¶çš„æ ‡è®°
 		String fileMd5 = request.getParameter("fileMd5");
 		String fileName = request.getParameter("fileName");
 		String fileSize = request.getParameter("fileSize");
@@ -130,13 +130,13 @@ public class WebUploaderController {
     	StringBuilder command = new StringBuilder("cat ");
 		try {
 			String fileSuffix = fileName.substring(fileName.lastIndexOf('.')+1).toLowerCase();
-    		// µÃµ½·Ö¿éµÄÁÙÊ±ÎÄ¼ş¼Ğ
+    		// å¾—åˆ°åˆ†å—çš„ä¸´æ—¶æ–‡ä»¶å¤¹
         	String tempPath = DateUtil.parseDateToStr(new Date(), DateUtil.DATE_FORMAT_YYYYMMDD);	
         	String blockDir = sftpCfg.getFileUploadPath()+"/"+Constant.TEMPLATE_DIR + "/" + fileMd5;
            	String ftpUploadDir = sftpCfg.getFileUploadPath()+"/"+tempPath;
 			if(sftpUtil.isDirExist(blockDir)) {
 				sftpUtil.cd(blockDir);
-				//Ğ£ÑéÊÇ·ñÉÏ´«Íê
+				//æ ¡éªŒæ˜¯å¦ä¸Šä¼ å®Œ
 				String ftpFileName = System.currentTimeMillis()+"."+fileSuffix;
 				String realFile = ftpUploadDir+"/"+ftpFileName;
 				Vector vector = sftpUtil.getAllFiles(blockDir,Constant.BLOCK_SUFFIX);
@@ -153,17 +153,17 @@ public class WebUploaderController {
 					result = sftpUtil.executeShell(rmFile);
 				}
 				map.put(Constant.RESULT_STAT, Constant.RESULT_STAT_SUCCESS);
-				map.put("msg", "ÉÏ´«³É¹¦");
+				map.put("msg", "ä¸Šä¼ æˆåŠŸ");
 			}else {
-				// ÉÏ´«Ê§°Ü
-				logger.debug("ºÏ²¢Ê§°Ü£¬Ã»ÓĞÈ¡µ½·Ö¿éÎÄ¼ş");
+				// ä¸Šä¼ å¤±è´¥
+				logger.debug("åˆå¹¶å¤±è´¥ï¼Œæ²¡æœ‰å–åˆ°åˆ†å—æ–‡ä»¶");
     			map.put(Constant.RESULT_STAT, Constant.RESULT_STAT_ERROR);
-				map.put("msg", "ÉÏ´«Ê§°Ü");
+				map.put("msg", "ä¸Šä¼ å¤±è´¥");
 			}
 		}catch(Exception e) {
 			logger.error(e.getMessage(),e);
 			map.put(Constant.RESULT_STAT, Constant.RESULT_STAT_ERROR);
-			map.put("msg", "ÉÏ´«Ê§°Ü");
+			map.put("msg", "ä¸Šä¼ å¤±è´¥");
 		}finally {
 			 KeyedSftpFactory.getSftpPool().returnSftpUtil(Constant.SFTP_01, sftpUtil);
 		}
